@@ -12,8 +12,18 @@ typedef struct Petersons_Variables {
 	int turn;
 	int flag[2]; 
 } pv;
+
 int nloop = 50;
 
+/**********************************************************
+ * * Function: initialize peterson variable               **
+ *  argument: ptr (address of an instance of the peterson variable       *
+ * * output  : nothing                                       *
+ ***********************************************************/
+void initialize (pv *v) {
+	v->flag[0] = 0;
+	v->flag[1] = 0;
+}
 /**********************************************************
  * * Function: increment a counter by some amount one by one **
  *  argument: ptr (address of the counter), increment       *
@@ -31,10 +41,6 @@ void add_n(int *ptr, int increment){
  * * Input: pointer to a petersons struc
  * * Output: NA 
  *******************************************************/
-void initialize (pv *v) {
-	v->flag[0] = 0;
-	v->flag[1] = 0;
-}
 int main(){
 	int pid;        /* Process ID                     */
 
@@ -52,86 +58,71 @@ int main(){
 	/* map my file to memory */
 	countptr = (int *) mmap(NULL, sizeof(int),PROT_READ | PROT_WRITE, MAP_SHARED, fd,0);
 
-
-
 	if (!countptr) {
 		printf("Mapping failed\n");
 		exit(1);
 	}
 	*countptr = 0;
-
 	close(fd);
-
-	/* Peterson Mapping added by Kevin
-	 * This is where the struct at the top is mapped.  */
 	system("rm -f memfile"); 
-	int memd;
-	pv *variables;
-	memd = open("memfile", O_RDWR | O_CREAT);
-	write(memd,&zero,sizeof(pv));
-
-	variables  = (pv *) mmap(NULL, sizeof(pv), PROT_READ | PROT_WRITE,
-			MAP_SHARED, memd, 0);	
-	if(!variables) {
+	int mem;
+	pv *vs;
+	mem = open("memfile", O_RDWR | O_CREAT);
+	write(mem, &zero, sizeof(pv));
+	vs  = (pv *) mmap(NULL, sizeof(pv), PROT_READ | PROT_WRITE, MAP_SHARED, mem, 0);
+   	
+	if(!vs) {
 		printf("Unable to map variables");
 		exit(1);
 	}
-	initialize(variables);
-	close(memd);
+   
+	initialize(vs);
+	close(mem);
 	pid = fork();
-	if (pid == 0) 
-	{
-		while(1) 
-		{
-			//Initialization
-			variables->flag[0] = 1;
-			variables->turn = 1;
-			//Entry
-			while(variables->flag[1] == 1 && variables->turn == 1);
-			//Crit Start
-			/* The child increments the counter by two's */
-			if (*countptr < nloop)
-			{
+   
+	if (pid == 0) {
+		while(1) {
+			vs->flag[0] = 1;
+			vs->turn = 1;
+			while(vs->flag[1] == 1 && vs->turn == 1);
+			
+         /* The child increments the counter by two's */
+			if (*countptr < nloop) {
 				add_n(countptr,2);
-				printf("Child process -->> counter = %d\n",*countptr);
-			} else {
-				variables->flag[0] = 0;
-				close(memd);
+				printf("Child process -->> counter = %d\n", *countptr);
+			} 
+         else {
+				vs->flag[0] = 0;
+				close(mem);
 				close(fd);
 				break;
 			}
-			//Crit End
-
-			////Exit 
-			variables->flag[0] = 0;
-			close(memd);
+			
+         vs->flag[0] = 0;
+			close(mem);
 			close(fd);
-
 		}			
 	}
 	else {
-		while(1)
-		{
-			//Initialization
-			variables->flag[1] = 1;
-			variables->turn = 0;
-			//Entry
-			while(variables->flag[0] == 1 && variables->turn == 0);
-			//Crit Start
-			/* The parent increments the counter by twenty's */
-			if (*countptr < nloop){
-				add_n(countptr,20);
-				printf("Parent process -->> counter = %d\n",*countptr);
-			} else {
-				variables->flag[1] = 0;
-				close(memd);
+		while(1) {
+			vs->flag[1] = 1;
+			vs->turn = 0;
+			while(vs->flag[0] == 1 && vs->turn == 0);
+			
+         /* The parent increments the counter by twenty's */
+			if (*countptr < nloop) {
+				add_n(countptr, 20);
+				printf("Parent process -->> counter = %d\n", *countptr);
+			} 
+         else {
+				vs->flag[1] = 0;
+				close(mem);
 				close(fd);
 				break;
 			}
-			//Crit End
-			////Exit 
-			variables->flag[1] = 0;
-			close(memd);
+			
+         vs->flag[1] = 0;
+			close(mem);
 			close(fd);
 		}
 	}
